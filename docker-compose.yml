@@ -1,0 +1,62 @@
+services:
+  # Aplicación Laravel -> http://localhost:8000
+  app:
+    build: .
+    container_name: ecommerce_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/var/www
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ecommerce
+      DB_USERNAME: root
+      DB_PASSWORD: secret
+    depends_on:
+      db:
+        condition: service_healthy
+    # Al arrancar: crea .env, instala dependencias, genera la llave, migra y levanta el servidor
+    command: >
+      sh -c "
+      [ -f .env ] || cp .env.example .env;
+      [ -f vendor/autoload.php ] || composer install --no-interaction;
+      grep -q '^APP_KEY=base64' .env || php artisan key:generate --force;
+      php artisan migrate --force;
+      php artisan serve --host=0.0.0.0 --port=8000
+      "
+
+  # Base de datos MySQL
+  db:
+    image: mysql:8.4
+    container_name: ecommerce_db
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: ecommerce
+    ports:
+      - "3307:3306"   # 3307 para no chocar con un MySQL/XAMPP local
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # phpMyAdmin -> http://localhost:8080  (usuario: root, contraseña: secret)
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: ecommerce_pma
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: secret
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dbdata:
