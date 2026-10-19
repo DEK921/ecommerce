@@ -37,14 +37,19 @@ class AuthAndRolesTest extends TestCase
 
         $response->assertRedirect(route('cliente.dashboard'));
         $this->assertAuthenticated();
+
         $this->assertDatabaseHas('users', [
-            'email' => 'maria@correo.com', 'role' => 'cliente', 'phone' => '9611234567',
+            'email' => 'maria@correo.com',
+            'role' => 'cliente',
+            'phone' => '9611234567',
         ]);
     }
 
     public function test_registro_rechaza_datos_incorrectos(): void
     {
-        User::factory()->create(['email' => 'repetido@correo.com']);
+        User::factory()->create([
+            'email' => 'repetido@correo.com',
+        ]);
 
         $this->from('/registro')->post('/registro', [
             'name' => 'J4',
@@ -53,7 +58,13 @@ class AuthAndRolesTest extends TestCase
             'password' => 'corta',
             'password_confirmation' => 'distinta',
         ])->assertRedirect('/registro')
-          ->assertSessionHasErrors(['name', 'email', 'phone', 'password', 'terms']);
+          ->assertSessionHasErrors([
+              'name',
+              'email',
+              'phone',
+              'password',
+              'terms',
+          ]);
 
         $this->assertGuest();
     }
@@ -67,66 +78,137 @@ class AuthAndRolesTest extends TestCase
         ];
 
         foreach ($roles as $role => $route) {
-            $user = User::factory()->create(['role' => $role, 'password' => 'Password123']);
+            $user = User::factory()->create([
+                'role' => $role,
+                'password' => 'Password123',
+            ]);
 
-            $this->post('/login', ['email' => $user->email, 'password' => 'Password123'])
-                ->assertRedirect(route($route));
+            $this->post('/login', [
+                'email' => $user->email,
+                'password' => 'Password123',
+            ])->assertRedirect(route($route));
 
             $this->get(route($route))->assertOk();
+
             $this->post('/logout')->assertRedirect('/');
+
             $this->assertGuest();
         }
     }
 
     public function test_login_con_contrasena_incorrecta_falla(): void
     {
-        $user = User::factory()->create(['password' => 'Password123']);
+        $user = User::factory()->create([
+            'password' => 'Password123',
+        ]);
 
-        $this->post('/login', ['email' => $user->email, 'password' => 'otra'])
-            ->assertSessionHasErrors('email');
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'otra',
+        ])->assertSessionHasErrors('email');
 
         $this->assertGuest();
     }
 
     public function test_cliente_no_puede_entrar_a_zona_de_gerente(): void
     {
-        $cliente = User::factory()->create(['role' => 'cliente']);
+        $cliente = User::factory()->create([
+            'role' => 'cliente',
+        ]);
 
-        $this->actingAs($cliente)->get('/usuarios')->assertRedirect(route('cliente.dashboard'));
-        $this->actingAs($cliente)->get('/gerente/dashboard')->assertRedirect(route('cliente.dashboard'));
+        $this->actingAs($cliente)
+            ->get('/usuarios')
+            ->assertRedirect(route('cliente.dashboard'));
+
+        $this->actingAs($cliente)
+            ->get('/gerente/dashboard')
+            ->assertRedirect(route('cliente.dashboard'));
     }
 
     public function test_gerente_hace_crud_de_usuarios(): void
     {
-        $gerente = User::factory()->create(['role' => 'gerente']);
+        $gerente = User::factory()->create([
+            'role' => 'gerente',
+        ]);
+
         $this->actingAs($gerente);
 
-        // Listar
-        $this->get('/usuarios')->assertOk()->assertSee($gerente->email);
+        // Listar usuarios.
+        $this->get('/usuarios')
+            ->assertOk()
+            ->assertSee($gerente->email);
 
-        // Crear
+        // Crear usuario.
         $this->post('/usuarios', [
-            'name' => 'Pedro Ruiz', 'email' => 'pedro@correo.com', 'role' => 'empleado',
-            'password' => 'Password123', 'password_confirmation' => 'Password123',
+            'name' => 'Pedro Ruiz',
+            'email' => 'pedro@correo.com',
+            'role' => 'empleado',
+            'password' => 'Password123',
+            'password_confirmation' => 'Password123',
         ])->assertRedirect('/usuarios');
+
         $pedro = User::where('email', 'pedro@correo.com')->firstOrFail();
+
         $this->assertSame('empleado', $pedro->role);
 
-        // Ver
-        $this->get("/usuarios/{$pedro->id}")->assertOk()->assertSee('Pedro Ruiz');
+        // Consultar usuario.
+        $this->get("/usuarios/{$pedro->id}")
+            ->assertOk()
+            ->assertSee('Pedro Ruiz');
 
-        // Editar (sin cambiar contraseña)
+        // Editar usuario sin cambiar la contraseña.
         $this->put("/usuarios/{$pedro->id}", [
-            'name' => 'Pedro Ruiz Gómez', 'email' => 'pedro@correo.com', 'role' => 'cliente',
+            'name' => 'Pedro Ruiz Gómez',
+            'email' => 'pedro@correo.com',
+            'role' => 'cliente',
         ])->assertRedirect('/usuarios');
-        $this->assertDatabaseHas('users', ['id' => $pedro->id, 'name' => 'Pedro Ruiz Gómez', 'role' => 'cliente']);
 
-        // Eliminar
-        $this->delete("/usuarios/{$pedro->id}")->assertRedirect('/usuarios');
-        $this->assertDatabaseMissing('users', ['id' => $pedro->id]);
+        $this->assertDatabaseHas('users', [
+            'id' => $pedro->id,
+            'name' => 'Pedro Ruiz Gómez',
+            'role' => 'cliente',
+        ]);
 
-        // No puede eliminarse a sí mismo
+        // Eliminar usuario.
+        $this->delete("/usuarios/{$pedro->id}")
+            ->assertRedirect('/usuarios');
+
+        $this->assertDatabaseMissing('users', [
+            'id' => $pedro->id,
+        ]);
+
+        // El gerente no puede eliminarse a sí mismo.
         $this->delete("/usuarios/{$gerente->id}");
-        $this->assertDatabaseHas('users', ['id' => $gerente->id]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $gerente->id,
+        ]);
+    }
+
+    public function test_logout_invalida_sesion_y_bloquea_rutas_protegidas(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'cliente',
+        ]);
+
+        $this->actingAs($user);
+
+        $this->withSession([
+            'dato_temporal_prueba' => 'sesion-activa',
+        ]);
+
+        $this->assertAuthenticated();
+
+        $this->post('/logout')
+            ->assertRedirect('/')
+            ->assertSessionMissing('dato_temporal_prueba');
+
+        $this->assertGuest();
+
+        $this->get('/cliente/dashboard')
+            ->assertRedirect('/login');
+
+        $this->get('/usuarios')
+            ->assertRedirect('/login');
     }
 }
