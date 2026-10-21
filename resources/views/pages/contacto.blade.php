@@ -13,7 +13,7 @@
         </div>
         <div class="card">
             <h3>✉️ Correo</h3>
-            <p>contacto@mercadonova.mx</p>
+            <p>mercadonova@com.mx</p>
         </div>
         <div class="card">
             <h3>💬 Redes sociales</h3>

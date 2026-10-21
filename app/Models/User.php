@@ -61,7 +61,7 @@ class User extends Authenticatable
 
     public function isGerente(): bool
     {
-        return $this->role === self::ROLE_GERENTE;
+        return $this->role === self::ROLE_GERENTE ;
     }
 
     /** Nombre legible del rol, p. ej. "Gerente". */
